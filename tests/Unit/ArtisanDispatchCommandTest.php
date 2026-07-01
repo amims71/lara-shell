@@ -137,3 +137,10 @@ it('does not duplicate the command name when given a single bare token', functio
         ->and($driver->backgroundedArgv)->toBe(['serve'])
         ->and($driver->ranArgv)->toBe([]);
 });
+
+it('declares its args as a CodeArgument so PsySH passes options through raw', function () {
+    [$cmd] = makeDispatch('route:list', []);
+
+    expect($cmd->getDefinition()->getArgument('args'))
+        ->toBeInstanceOf(\Psy\Input\CodeArgument::class);
+});

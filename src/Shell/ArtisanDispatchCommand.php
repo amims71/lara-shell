@@ -8,7 +8,7 @@ use Amims71\LaraShell\Features\GuardLevel;
 use Amims71\LaraShell\Features\SafetyGuard;
 use Amims71\LaraShell\Jobs\LongRunning;
 use Psy\Command\Command;
-use Symfony\Component\Console\Input\InputArgument;
+use Psy\Input\CodeArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
@@ -33,8 +33,13 @@ class ArtisanDispatchCommand extends Command
     {
         $this->setName($this->canonicalName)
             ->setDescription('Run the artisan command "'.$this->canonicalName.'"')
-            ->addArgument('args', InputArgument::IS_ARRAY, 'Arguments and options passed to the artisan command.')
             ->ignoreValidationErrors();
+
+        // A CodeArgument makes PsySH hand us the rest of the line raw — so artisan options
+        // (e.g. --path) aren't parsed against this command's definition and rejected.
+        $this->getDefinition()->addArgument(
+            new CodeArgument('args', CodeArgument::OPTIONAL, 'Raw arguments and options for the artisan command.')
+        );
     }
 
     /**
