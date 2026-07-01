@@ -120,3 +120,42 @@ it('expands an alias and dispatches the expansion', function () {
 
     expect($driver->ranArgv)->toBe(['route:list', '--json']);
 });
+
+it('keeps a quoted argument with spaces as a single token', function () {
+    $driver = dispatchRecordingDriver();
+    $shell = buildDispatchShell($driver);
+
+    dispatchLine($shell, 'make:model "Foo Bar"');
+
+    expect($driver->ranArgv)->toBe(['make:model', 'Foo Bar']);
+});
+
+it('refuses a guarded command inside a macro (macros cannot prompt)', function () {
+    $this->app['env'] = 'production';
+
+    $file = sys_get_temp_dir().'/lara-shell-macroguard-'.bin2hex(random_bytes(4)).'.php';
+    file_put_contents($file, '<?php return '.var_export([
+        'aliases' => [],
+        'macros' => ['reset' => ['migrate:fresh --force']],
+    ], true).';');
+    register_shutdown_function(fn () => @unlink($file));
+
+    $driver = dispatchRecordingDriver();
+    $catalog = new CommandCatalog(app(Kernel::class));
+    $resolver = new CommandResolver($catalog);
+    $guard = new SafetyGuard(app(), ['environments' => ['production'], 'block' => [], 'confirm' => ['migrate:fresh']]);
+    $aliasStore = new AliasStore($file);
+
+    $config = new Configuration(['configFile' => null, 'usePcntl' => false]);
+    $config->setUpdateCheck(Checker::NEVER);
+
+    $shell = new ArtisanShell(
+        $config, $driver, $resolver, $catalog, $guard,
+        new LongRunning([]), $aliasStore, new Expander($aliasStore, 10)
+    );
+
+    $shell->runMacro('reset');
+
+    expect($driver->ranArgv)->toBe([])
+        ->and($driver->backgroundedArgv)->toBe([]);
+});

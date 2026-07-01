@@ -7,6 +7,7 @@ use Amims71\LaraShell\Features\AliasLoopException;
 use Amims71\LaraShell\Features\AliasStore;
 use Amims71\LaraShell\Features\CommandResolver;
 use Amims71\LaraShell\Features\Expander;
+use Amims71\LaraShell\Features\GuardLevel;
 use Amims71\LaraShell\Features\SafetyGuard;
 use Amims71\LaraShell\Jobs\LongRunning;
 use Amims71\LaraShell\Shell\Commands\HelpCommand;
@@ -102,7 +103,9 @@ class ArtisanShell extends Shell
 
         $first = $this->firstToken($line);
 
-        if (isset($this->metaNames[$first])) {
+        // An exact match to a registered shell command — our meta-commands OR a PsySH built-in
+        // (clear, doc, dump, ls, …) — wins over fuzzy artisan resolution, so we never shadow them.
+        if (isset($this->metaNames[$first]) || $this->has($first)) {
             return 'meta';
         }
 
@@ -202,6 +205,16 @@ class ArtisanShell extends Shell
 
             $decision = $this->makeDispatch($line)->decideStored();
 
+            // Macros run non-interactively, so a guarded step can't be confirmed — refuse it
+            // rather than silently running a Block/Confirm command (e.g. migrate:fresh in prod).
+            if ($decision['level'] !== GuardLevel::Allow) {
+                $this->configuration->getOutput()->writeln(
+                    '<error>Guarded command "'.$decision['name'].'" is not allowed inside a macro.</error>'
+                );
+
+                return 1;
+            }
+
             return $decision['background'] ? 0 : $this->driver->run($decision['argv'], $this->configuration->getOutput());
         };
     }
@@ -238,18 +251,40 @@ class ArtisanShell extends Shell
 
     private function firstToken(string $line): string
     {
-        $parts = preg_split('/\s+/', trim($line), 2) ?: [''];
-
-        return (string) $parts[0];
+        return $this->tokenize($line)[0] ?? '';
     }
 
     /**
+     * Quote-aware split: honors "double" and 'single' quotes so arguments with spaces
+     * (e.g. make:model "Foo Bar") stay a single token, with the surrounding quotes stripped.
+     *
      * @return string[]
      */
     private function tokenize(string $line): array
     {
-        $tokens = preg_split('/\s+/', trim($line));
+        $line = trim($line);
 
-        return $tokens === false || $tokens === [''] ? [] : $tokens;
+        if ($line === '') {
+            return [];
+        }
+
+        preg_match_all('/"(?:\\\\.|[^"\\\\])*"|\'[^\']*\'|\S+/', $line, $matches);
+
+        return array_map(fn (string $token): string => $this->unquote($token), $matches[0]);
+    }
+
+    private function unquote(string $token): string
+    {
+        $len = strlen($token);
+
+        if ($len >= 2 && $token[0] === '"' && $token[$len - 1] === '"') {
+            return stripcslashes(substr($token, 1, -1));
+        }
+
+        if ($len >= 2 && $token[0] === "'" && $token[$len - 1] === "'") {
+            return substr($token, 1, -1);
+        }
+
+        return $token;
     }
 }

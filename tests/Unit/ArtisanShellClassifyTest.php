@@ -112,6 +112,23 @@ it('classifies unknown input as php', function () {
     expect(buildShell()->classifyInput('nonsense123'))->toBe('php');
 });
 
+it('does not let fuzzy resolution hijack PsySH built-in commands', function () {
+    $shell = buildShell();
+
+    // clear/doc/dump are PsySH built-ins; they must run PsySH's command, not a fuzzy artisan match.
+    foreach (['clear', 'doc', 'dump'] as $builtin) {
+        expect($shell->classifyInput($builtin))->toBe('meta');
+    }
+
+    $get = new ReflectionMethod($shell, 'getCommand');
+    $get->setAccessible(true);
+    expect($get->invoke($shell, 'clear'))
+        ->not->toBeInstanceOf(\Amims71\LaraShell\Shell\ArtisanDispatchCommand::class);
+
+    // A genuine artisan-only name is unaffected.
+    expect($shell->classifyInput('serve'))->toBe('artisan');
+});
+
 it('classifies an alias that expands to a real command as artisan', function () {
     $shell = buildShell(aliases: ['mf' => 'migrate:fresh']);
     expect($shell->classifyInput('mf'))->toBe('artisan');
