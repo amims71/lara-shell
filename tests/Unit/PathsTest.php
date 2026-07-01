@@ -20,6 +20,7 @@ afterEach(function () {
             }
         }
     }
+    @unlink($this->base.'/storage/lara-shell/.gitignore');
     @rmdir($this->base.'/storage/lara-shell/logs');
     @rmdir($this->base.'/storage/lara-shell');
     @rmdir($this->base.'/storage');
@@ -71,4 +72,13 @@ it('is idempotent when directories already exist', function () {
     $this->paths->ensureDirectories();
 
     expect(is_dir($this->paths->logsDir()))->toBeTrue();
+});
+
+it('drops a self-ignoring .gitignore into the storage directory', function () {
+    $this->paths->ensureDirectories();
+
+    $gitignore = $this->paths->storageDir().'/.gitignore';
+
+    expect(is_file($gitignore))->toBeTrue()
+        ->and(file_get_contents($gitignore))->toBe("*\n!.gitignore\n");
 });

@@ -58,5 +58,12 @@ class Paths
                 mkdir($dir, 0700, true);
             }
         }
+
+        // Keep the host app's git clean: ignore everything here except this file.
+        $gitignore = $this->storageDir().'/.gitignore';
+
+        if (! is_file($gitignore)) {
+            file_put_contents($gitignore, "*\n!.gitignore\n");
+        }
     }
 }
