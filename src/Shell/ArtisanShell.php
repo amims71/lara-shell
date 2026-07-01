@@ -19,7 +19,7 @@ use Psy\Shell;
 class ArtisanShell extends Shell
 {
     /** Default meta-command names our shell owns (used for classification). */
-    private const DEFAULT_META = ['jobs', 'kill', 'logs', 'reload', 'alias', 'palette', '?'];
+    private const DEFAULT_META = ['jobs', 'kill', 'logs', 'reload', 'alias', 'palette', '?', 'help', 'h', 'about', 'guide'];
 
     /** @var array<string,true> registered meta-command names + aliases */
     private array $metaNames = [];
@@ -191,7 +191,7 @@ class ArtisanShell extends Shell
                 return 0;
             }
 
-            $decision = $this->makeDispatch($line)->decide($this->tokenize($line));
+            $decision = $this->makeDispatch($line)->decideStored();
 
             return $decision['background'] ? 0 : $this->driver->run($decision['argv'], $this->configuration->getOutput());
         };
@@ -199,11 +199,27 @@ class ArtisanShell extends Shell
 
     private function makeDispatch(string $input): ArtisanDispatchCommand
     {
-        $name = $this->resolveArtisan($input) ?? $this->firstToken($input);
+        $tokens = $this->expandedTokens($input);
+        $name = $this->resolver->resolve($tokens[0] ?? '') ?? $this->firstToken($input);
 
         return new ArtisanDispatchCommand(
-            $this->driver, $this->resolver, $this->guard, $this->longRunning, $name
+            $this->driver, $this->resolver, $this->guard, $this->longRunning, $name, $tokens
         );
+    }
+
+    /**
+     * Expand the first-word alias, then split into argv tokens (command word + args, incl. "&").
+     *
+     * @return string[]
+     */
+    private function expandedTokens(string $input): array
+    {
+        $expanded = $this->expander->expand(
+            trim($input),
+            fn (string $token): bool => $this->isRealCommand($token)
+        );
+
+        return $this->tokenize($expanded);
     }
 
     private function isRealCommand(string $token): bool

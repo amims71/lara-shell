@@ -14,12 +14,17 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 class ArtisanDispatchCommand extends Command
 {
+    /**
+     * @param  string[]  $tokens  the pre-tokenized argv (command word + args, incl. a trailing "&"),
+     *                            supplied by ArtisanShell so we never re-parse through Symfony.
+     */
     public function __construct(
         private Driver $driver,
         private CommandResolver $resolver,
         private SafetyGuard $guard,
         private LongRunning $longRunning,
-        private string $canonicalName
+        private string $canonicalName,
+        private array $tokens = []
     ) {
         parent::__construct($canonicalName);
     }
@@ -66,14 +71,15 @@ class ArtisanDispatchCommand extends Command
         ];
     }
 
+    /** Decide from the tokens ArtisanShell handed us (falls back to the bare command name). */
+    public function decideStored(): array
+    {
+        return $this->decide($this->tokens !== [] ? $this->tokens : [$this->canonicalName]);
+    }
+
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $tokens = array_merge(
-            [$this->canonicalName],
-            array_map('strval', (array) ($input->getArgument('args') ?? []))
-        );
-
-        $decision = $this->decide($tokens);
+        $decision = $this->decideStored();
 
         if ($decision['level'] === GuardLevel::Block) {
             $output->writeln('<error>Command "'.$decision['name'].'" is blocked in this environment.</error>');

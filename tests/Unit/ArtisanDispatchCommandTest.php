@@ -48,15 +48,26 @@ function recordingDriver(): Driver
     };
 }
 
-function makeDispatch(string $name, array $longRunning): array
+function makeDispatch(string $name, array $longRunning, array $tokens = []): array
 {
     $driver = recordingDriver();
     $resolver = new CommandResolver(new CommandCatalog(app(Kernel::class)));
     $guard = new SafetyGuard(app(), ['environments' => ['production'], 'block' => [], 'confirm' => ['migrate']]);
 
-    $cmd = new ArtisanDispatchCommand($driver, $resolver, $guard, new LongRunning($longRunning), $name);
+    $cmd = new ArtisanDispatchCommand($driver, $resolver, $guard, new LongRunning($longRunning), $name, $tokens);
 
     return [$cmd, $driver];
+}
+
+function invokeExecute(ArtisanDispatchCommand $cmd): int
+{
+    $input = new ArrayInput([]);
+    $input->bind($cmd->getDefinition());
+
+    $method = new ReflectionMethod($cmd, 'execute');
+    $method->setAccessible(true);
+
+    return $method->invoke($cmd, $input, new NullOutput());
 }
 
 it('flags a guarded command as Confirm in production', function () {
@@ -97,15 +108,10 @@ it('allows a plain fast command to run in the foreground', function () {
         ->and($decision['background'])->toBeFalse();
 });
 
-it('passes the real argv through to the driver on a foreground run', function () {
-    [$cmd, $driver] = makeDispatch('route:list', []);
+it('passes the injected argv straight through to the driver on a foreground run', function () {
+    [$cmd, $driver] = makeDispatch('route:list', [], ['route:list', '--json', '--path=/api']);
 
-    $input = new ArrayInput(['args' => ['--json', '--path=/api']]);
-    $input->bind($cmd->getDefinition());
-
-    $method = new ReflectionMethod($cmd, 'execute');
-    $method->setAccessible(true);
-    $exit = $method->invoke($cmd, $input, new NullOutput());
+    $exit = invokeExecute($cmd);
 
     expect($exit)->toBe(0)
         ->and($driver->ranArgv)->toBe(['route:list', '--json', '--path=/api'])
@@ -113,16 +119,21 @@ it('passes the real argv through to the driver on a foreground run', function ()
 });
 
 it('routes a trailing ampersand to the driver as a background job', function () {
-    [$cmd, $driver] = makeDispatch('route:list', []);
+    [$cmd, $driver] = makeDispatch('route:list', [], ['route:list', '--json', '&']);
 
-    $input = new ArrayInput(['args' => ['--json', '&']]);
-    $input->bind($cmd->getDefinition());
-
-    $method = new ReflectionMethod($cmd, 'execute');
-    $method->setAccessible(true);
-    $exit = $method->invoke($cmd, $input, new NullOutput());
+    $exit = invokeExecute($cmd);
 
     expect($exit)->toBe(0)
         ->and($driver->backgroundedArgv)->toBe(['route:list', '--json'])
+        ->and($driver->ranArgv)->toBe([]);
+});
+
+it('does not duplicate the command name when given a single bare token', function () {
+    [$cmd, $driver] = makeDispatch('serve', ['serve'], ['serve']);
+
+    $exit = invokeExecute($cmd);
+
+    expect($exit)->toBe(0)
+        ->and($driver->backgroundedArgv)->toBe(['serve'])
         ->and($driver->ranArgv)->toBe([]);
 });
