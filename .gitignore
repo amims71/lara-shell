@@ -1,0 +1,10 @@
+/vendor/
+composer.lock
+.phpunit.result.cache
+.phpunit.cache/
+build/
+.idea/
+.DS_Store
+
+# Internal design/planning artifacts (brainstorming specs, implementation plans) — do not commit
+/docs/superpowers/
