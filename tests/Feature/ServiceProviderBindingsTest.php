@@ -3,6 +3,7 @@
 use Amims71\LaraShell\Console\ShellCommand;
 use Amims71\LaraShell\Drivers\Driver;
 use Amims71\LaraShell\Drivers\DriverFactory;
+use Amims71\LaraShell\Drivers\ForkingDriver;
 use Amims71\LaraShell\Drivers\LocalDriver;
 use Amims71\LaraShell\Features\AliasStore;
 use Amims71\LaraShell\Features\CommandResolver;
@@ -61,10 +62,12 @@ it('binds every Plan-1 service as a resolvable singleton', function () {
     }
 });
 
-it('binds JobRegistry to FileJobRegistry and Driver to a LocalDriver', function () {
+it('binds JobRegistry to FileJobRegistry and Driver to the platform driver', function () {
+    $expected = DriverFactory::supportsForking() ? ForkingDriver::class : LocalDriver::class;
+
     expect($this->app->make(JobRegistry::class))->toBeInstanceOf(FileJobRegistry::class)
         ->and($this->app->make(Driver::class))->toBeInstanceOf(Driver::class)
-        ->and($this->app->make(Driver::class))->toBeInstanceOf(LocalDriver::class);
+        ->and($this->app->make(Driver::class))->toBeInstanceOf($expected);
 });
 
 it('builds a fully wired ArtisanShell with meta-commands without starting it', function () {

@@ -5,6 +5,7 @@ namespace Amims71\LaraShell;
 use Amims71\LaraShell\Console\ShellCommand;
 use Amims71\LaraShell\Drivers\Driver;
 use Amims71\LaraShell\Drivers\DriverFactory;
+use Amims71\LaraShell\Drivers\ForkingDriver;
 use Amims71\LaraShell\Drivers\LocalDriver;
 use Amims71\LaraShell\Features\AliasStore;
 use Amims71\LaraShell\Features\CommandResolver;
@@ -57,6 +58,13 @@ class LaraShellServiceProvider extends ServiceProvider
             $app->basePath('artisan'),
             $app->make(JobRegistry::class),
             $app->make(Paths::class),
+        ));
+
+        $this->app->singleton(ForkingDriver::class, fn (Application $app) => new ForkingDriver(
+            $app->make(LocalDriver::class),
+            $app->make(Kernel::class),
+            PHP_BINARY,
+            $app->basePath('artisan'),
         ));
 
         $this->app->singleton(Driver::class, fn (Application $app) => $app->make(DriverFactory::class)->make());

@@ -3,6 +3,7 @@
 use Amims71\LaraShell\Console\ShellCommand;
 use Amims71\LaraShell\Drivers\Driver;
 use Amims71\LaraShell\Drivers\DriverFactory;
+use Amims71\LaraShell\Drivers\ForkingDriver;
 use Amims71\LaraShell\Drivers\LocalDriver;
 use Amims71\LaraShell\Features\AliasStore;
 use Amims71\LaraShell\Features\CommandResolver;
@@ -55,10 +56,12 @@ it('resolves the full execution graph from the container', function () {
         ->and($shell)->toBeInstanceOf(ArtisanShell::class);
 });
 
-it('DriverFactory make returns a LocalDriver in Plan 1', function () {
+it('DriverFactory make returns the platform driver (warm-fork on Unix)', function () {
     $driver = $this->app->make(DriverFactory::class)->make();
 
-    expect($driver)->toBeInstanceOf(LocalDriver::class);
+    expect($driver)->toBeInstanceOf(
+        DriverFactory::supportsForking() ? ForkingDriver::class : LocalDriver::class
+    );
 });
 
 it('classifies representative lines end-to-end through the resolved shell', function () {

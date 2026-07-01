@@ -3,6 +3,10 @@
 return [
     'command' => ['name' => 'shell', 'aliases' => ['terminal', 'repl']],
 
+    // Execution driver: 'auto' uses the fast warm-fork driver on Unix (pcntl+posix),
+    // falling back to fresh subprocesses elsewhere. Force with 'local' or 'forking'.
+    'driver' => 'auto',
+
     'long_running' => [
         'serve',
         'queue:work',

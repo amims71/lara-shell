@@ -1,13 +1,8 @@
 <?php
 
-use Amims71\LaraShell\Drivers\Driver;
 use Amims71\LaraShell\Drivers\DriverFactory;
+use Amims71\LaraShell\Drivers\ForkingDriver;
 use Amims71\LaraShell\Drivers\LocalDriver;
-use Amims71\LaraShell\Jobs\FileJobRegistry;
-use Amims71\LaraShell\Jobs\JobRegistry;
-use Amims71\LaraShell\Jobs\ProcessTree;
-use Amims71\LaraShell\Support\Paths;
-use Illuminate\Container\Container;
 
 it('reports daemon support as a bool without throwing', function () {
     expect(DriverFactory::supportsDaemon())->toBeBool();
@@ -23,23 +18,24 @@ it('agrees with the documented Unix + pcntl + posix + unix-transport probe', fun
     expect(DriverFactory::supportsDaemon())->toBe($expected);
 });
 
-it('makes a LocalDriver from the container in Plan 1', function () {
-    $container = new Container();
+it('reports forking support as a bool', function () {
+    expect(DriverFactory::supportsForking())->toBeBool();
+});
 
-    $paths = new Paths(sys_get_temp_dir());
-    $registry = new FileJobRegistry($paths->jobsFile(), new ProcessTree());
+it('makes a LocalDriver when the driver is forced to local', function () {
+    config(['lara-shell.driver' => 'local']);
 
-    $container->instance(JobRegistry::class, $registry);
-    $container->bind(LocalDriver::class, fn () => new LocalDriver(
-        PHP_BINARY,
-        'artisan',
-        $registry,
-        $paths,
-    ));
+    expect(app(DriverFactory::class)->make())->toBeInstanceOf(LocalDriver::class);
+});
 
-    $factory = new DriverFactory($container);
-    $driver = $factory->make();
+it('makes the warm-fork driver under auto when forking is supported', function () {
+    config(['lara-shell.driver' => 'auto']);
 
-    expect($driver)->toBeInstanceOf(Driver::class)
-        ->and($driver)->toBeInstanceOf(LocalDriver::class);
+    $driver = app(DriverFactory::class)->make();
+
+    if (DriverFactory::supportsForking()) {
+        expect($driver)->toBeInstanceOf(ForkingDriver::class);
+    } else {
+        expect($driver)->toBeInstanceOf(LocalDriver::class);
+    }
 });
