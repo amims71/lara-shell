@@ -9,6 +9,7 @@ use Amims71\LaraShell\Features\CommandResolver;
 use Amims71\LaraShell\Features\Expander;
 use Amims71\LaraShell\Features\SafetyGuard;
 use Amims71\LaraShell\Jobs\LongRunning;
+use Amims71\LaraShell\Shell\Commands\HelpCommand;
 use Amims71\LaraShell\Shell\Matchers\ArtisanNameMatcher;
 use Amims71\LaraShell\Support\CommandCatalog;
 use Closure;
@@ -141,7 +142,15 @@ class ArtisanShell extends Shell
         }
 
         if ($class === 'meta') {
-            return parent::getCommand($this->firstToken($input));
+            $first = $this->firstToken($input);
+
+            // Our help lives here, NOT in the shell's command registry, so we never shadow
+            // PsySH's own \Psy\Command\HelpCommand (which PsySH uses internally for error help).
+            if (in_array($first, ['help', 'h', 'about', 'guide'], true)) {
+                return new HelpCommand($this->catalog);
+            }
+
+            return parent::getCommand($first);
         }
 
         return null;

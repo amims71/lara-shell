@@ -16,7 +16,6 @@ use Amims71\LaraShell\Shell\Commands\AliasCommand;
 use Amims71\LaraShell\Shell\Commands\JobsCommand;
 use Amims71\LaraShell\Shell\Commands\KillCommand;
 use Amims71\LaraShell\Shell\Commands\LogsCommand;
-use Amims71\LaraShell\Shell\Commands\HelpCommand;
 use Amims71\LaraShell\Shell\Commands\PaletteCommand;
 use Amims71\LaraShell\Shell\Commands\ReloadCommand;
 use Amims71\LaraShell\Support\CommandCatalog;
@@ -116,7 +115,6 @@ class ShellCommand extends Command
             new LogsCommand($registry),
             new AliasCommand($aliasStore, $resolver),
             new PaletteCommand($palette),
-            new HelpCommand($catalog),
         ];
     }
 }

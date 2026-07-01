@@ -95,6 +95,19 @@ it('classifies the help command and its aliases as meta', function () {
         ->and($shell->classifyInput('guide'))->toBe('meta');
 });
 
+it('resolves help to our HelpCommand without shadowing PsySH built-in help', function () {
+    $shell = buildShell();
+
+    $get = new ReflectionMethod($shell, 'getCommand');
+    $get->setAccessible(true);
+
+    expect($get->invoke($shell, 'help'))->toBeInstanceOf(\Amims71\LaraShell\Shell\Commands\HelpCommand::class)
+        ->and($get->invoke($shell, 'h'))->toBeInstanceOf(\Amims71\LaraShell\Shell\Commands\HelpCommand::class);
+
+    // PsySH's own help must stay registered so its internal error-help path keeps working.
+    expect($shell->get('help'))->toBeInstanceOf(\Psy\Command\HelpCommand::class);
+});
+
 it('classifies unknown input as php', function () {
     expect(buildShell()->classifyInput('nonsense123'))->toBe('php');
 });
