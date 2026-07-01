@@ -16,6 +16,7 @@ use Amims71\LaraShell\Shell\Commands\AliasCommand;
 use Amims71\LaraShell\Shell\Commands\JobsCommand;
 use Amims71\LaraShell\Shell\Commands\KillCommand;
 use Amims71\LaraShell\Shell\Commands\LogsCommand;
+use Amims71\LaraShell\Shell\Commands\HelpCommand;
 use Amims71\LaraShell\Shell\Commands\PaletteCommand;
 use Amims71\LaraShell\Shell\Commands\ReloadCommand;
 use Amims71\LaraShell\Support\CommandCatalog;
@@ -58,6 +59,8 @@ class ShellCommand extends Command
             $this->metaCommands($driver, $catalog, $registry, $tree, $aliasStore, $resolver, $palette),
         );
 
+        $this->line('<info>lara-shell</info> · type <comment>help</comment> for a guide, <comment>palette</comment> (or ?) to search, or any artisan command · <comment>exit</comment> to quit');
+
         return $shell->run();
     }
 
@@ -80,6 +83,7 @@ class ShellCommand extends Command
         $config = new Configuration(['configFile' => null, 'usePcntl' => false]);
         $config->setHistoryFile($paths->historyFile());
         $config->setUpdateCheck(Checker::NEVER);
+        $config->setPrompt('artisan> ');
 
         $shell = new ArtisanShell(
             $config, $driver, $resolver, $catalog, $guard, $longRunning, $aliasStore, $expander
@@ -92,7 +96,7 @@ class ShellCommand extends Command
     }
 
     /**
-     * Build the six meta-commands from their resolved dependencies (correction C6).
+     * Build the shell's meta-commands from their resolved dependencies (correction C6).
      *
      * @return PsyCommand[]
      */
@@ -112,6 +116,7 @@ class ShellCommand extends Command
             new LogsCommand($registry),
             new AliasCommand($aliasStore, $resolver),
             new PaletteCommand($palette),
+            new HelpCommand($catalog),
         ];
     }
 }

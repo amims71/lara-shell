@@ -86,6 +86,15 @@ it('classifies a meta-command as meta', function () {
     expect(buildShell()->classifyInput('jobs'))->toBe('meta');
 });
 
+it('classifies the help command and its aliases as meta', function () {
+    $shell = buildShell();
+
+    expect($shell->classifyInput('help'))->toBe('meta')
+        ->and($shell->classifyInput('h'))->toBe('meta')
+        ->and($shell->classifyInput('about'))->toBe('meta')
+        ->and($shell->classifyInput('guide'))->toBe('meta');
+});
+
 it('classifies unknown input as php', function () {
     expect(buildShell()->classifyInput('nonsense123'))->toBe('php');
 });
