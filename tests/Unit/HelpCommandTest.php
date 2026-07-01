@@ -6,6 +6,8 @@ use Amims71\LaraShell\Support\CommandCatalog;
 use Amims71\LaraShell\Support\CommandMeta;
 use Amims71\LaraShell\Support\OptionMeta;
 use Illuminate\Contracts\Console\Kernel;
+use Psy\Input\ShellInput;
+use Symfony\Component\Console\Output\BufferedOutput;
 
 it('registers as "help" with h/about/guide aliases', function () {
     $command = new HelpCommand(new CommandCatalog(app(Kernel::class)));
@@ -53,4 +55,24 @@ it('renders per-command usage from command metadata', function () {
         ->and($blob)->toContain('--force')
         ->and($blob)->toContain('(-f)')
         ->and($blob)->toContain('name');
+});
+
+it('renders the guide (not PsySH help meta) for a bare invocation', function () {
+    $command = new HelpCommand(new CommandCatalog(app(Kernel::class)));
+    $buffer = new BufferedOutput();
+
+    $command->run(new ShellInput('help'), $buffer);
+    $out = $buffer->fetch();
+
+    expect($out)->toContain('Artisan commands')
+        ->and($out)->not->toContain('Display help for a command');
+});
+
+it('renders per-command usage for "help <command>" without throwing', function () {
+    $command = new HelpCommand(new CommandCatalog(app(Kernel::class)));
+    $buffer = new BufferedOutput();
+
+    $command->run(new ShellInput('help migrate'), $buffer);
+
+    expect($buffer->fetch())->toContain('migrate');
 });

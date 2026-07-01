@@ -5,7 +5,7 @@ namespace Amims71\LaraShell\Shell\Commands;
 use Amims71\LaraShell\Support\CommandCatalog;
 use Amims71\LaraShell\Support\CommandMeta;
 use Psy\Command\Command;
-use Symfony\Component\Console\Input\InputArgument;
+use Psy\Input\CodeArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
@@ -21,7 +21,13 @@ class HelpCommand extends Command
         $this->setName('help')
             ->setAliases(['h', 'about', 'guide'])
             ->setDescription('Show a guide to this shell, or usage for a specific command.')
-            ->addArgument('target', InputArgument::OPTIONAL, 'A command name to show detailed usage for.');
+            ->ignoreValidationErrors();
+
+        // CodeArgument captures the rest of the line raw. ShellInput leaves the command word
+        // ("help"/"h"/…) in it, so execute() strips it before the catalog lookup.
+        $this->getDefinition()->addArgument(
+            new CodeArgument('target', CodeArgument::OPTIONAL, 'A command name to show detailed usage for.')
+        );
     }
 
     /**
@@ -134,9 +140,13 @@ class HelpCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $target = $input->getArgument('target');
+        // The raw arg still starts with the command word (help/h/about/guide) — drop it,
+        // then take the first remaining token as the command to describe.
+        $raw = trim((string) $input->getArgument('target'));
+        $rest = trim(preg_split('/\s+/', $raw, 2)[1] ?? '');
+        $target = preg_split('/\s+/', $rest, 2)[0] ?? '';
 
-        if (is_string($target) && $target !== '') {
+        if ($target !== '') {
             $meta = $this->catalog->get($target);
 
             if ($meta === null) {
