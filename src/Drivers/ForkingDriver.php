@@ -58,6 +58,11 @@ class ForkingDriver implements Driver
             } finally {
                 @fwrite($child, pack('N', $code & 0xFF));
                 @fflush($child);
+                // SIGKILL skips PHP's shutdown flush, so flush any pending output buffers now
+                // to make sure already-produced command output reaches the inherited terminal.
+                while (ob_get_level() > 0) {
+                    @ob_end_flush();
+                }
                 // Die without shutdown handlers so shared connection fds are never closed.
                 posix_kill(posix_getpid(), SIGKILL);
             }
@@ -151,11 +156,29 @@ class ForkingDriver implements Driver
     {
         $app = function_exists('app') ? app() : null;
 
-        if ($app !== null && $app->bound('db')) {
+        if ($app === null) {
+            return;
+        }
+
+        // Purge ALL shared db + redis connections before fork so the child opens its own and
+        // never shares (then tears down) the parent's sockets. Best-effort per manager.
+        if ($app->bound('db')) {
             try {
-                $app->make('db')->purge();
+                $db = $app->make('db');
+                foreach (array_keys($db->getConnections()) as $name) {
+                    $db->purge($name);
+                }
             } catch (\Throwable) {
-                // Best-effort: a broken db manager must not block command execution.
+            }
+        }
+
+        if ($app->bound('redis')) {
+            try {
+                $redis = $app->make('redis');
+                foreach (array_keys($redis->connections()) as $name) {
+                    $redis->purge($name);
+                }
+            } catch (\Throwable) {
             }
         }
     }
