@@ -54,9 +54,22 @@ artisan> route:list
 artisan> migrate
 ```
 
+New here? Type **`help`** (or `h`) for a built-in guide to everything the shell can do, and **`help <command>`** for a specific command's usage. A short hint is printed on launch.
+
 ---
 
 ## Features
+
+### `help` and `h` — the built-in guide
+
+Type `help` (or its aliases `h`, `about`, `guide`) for an overview of everything the shell does. Pass a command name to see its usage, arguments, and options — rendered from the live command catalog, no subprocess:
+
+```text
+artisan> help
+artisan> help migrate      # usage, arguments and options for migrate
+```
+
+The shell prints a one-line hint on launch pointing you at `help` and `palette`.
 
 ### Bare-word artisan commands
 
