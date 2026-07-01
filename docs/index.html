@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>lara-shell — an interactive artisan command shell</title>
+<meta name="description" content="lara-shell is a PsySH-based REPL for Laravel where bare words run as artisan commands, with managed background jobs, aliases, macros, fuzzy matching and a production safety guard.">
+<style>
+  :root {
+    --bg:        #0b0e14;
+    --bg-alt:    #11151f;
+    --panel:     #141926;
+    --panel-2:   #0e131d;
+    --border:    #232a3a;
+    --border-2:  #2e3852;
+    --text:      #d7dce6;
+    --muted:     #8b94a7;
+    --dim:       #626b7e;
+    --accent:    #7ee787;   /* green — the artisan prompt */
+    --accent-2:  #6cb6ff;   /* blue */
+    --accent-3:  #d2a8ff;   /* purple — macros */
+    --accent-4:  #f0883e;   /* orange — warnings/guard */
+    --pink:      #ff7b9c;
+    --yellow:    #f2cc60;
+    --radius:    12px;
+    --mono: ui-monospace, "SF Mono", "SFMono-Regular", "Menlo", "Consolas", "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.65;
+    font-size: 16px;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    background-image:
+      radial-gradient(900px 500px at 85% -8%, rgba(108,182,255,0.10), transparent 60%),
+      radial-gradient(700px 500px at 5% 5%,   rgba(126,231,135,0.07), transparent 55%);
+  }
+
+  .wrap { width: 100%; max-width: 940px; margin: 0 auto; padding: 0 22px; }
+
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  code, kbd, pre, .mono { font-family: var(--mono); }
+
+  h1, h2, h3 { line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; }
+  h2 { font-size: 1.6rem; margin: 0 0 6px; }
+  h3 { font-size: 1.08rem; margin: 0 0 4px; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 10px;
+  }
+
+  section { padding: 56px 0; border-top: 1px solid var(--border); }
+  section:first-of-type { border-top: none; }
+  .lead { color: var(--muted); font-size: 1.05rem; max-width: 68ch; }
+
+  /* ---------- inline code ---------- */
+  p code, li code, td code, .icode {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 0.08em 0.4em;
+    font-size: 0.85em;
+    color: #e6c07b;
+    white-space: nowrap;
+  }
+
+  /* ---------- header / nav ---------- */
+  header.nav {
+    position: sticky; top: 0; z-index: 20;
+    background: rgba(11,14,20,0.82);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-inner {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; padding: 12px 22px; max-width: 940px; margin: 0 auto;
+  }
+  .brand { font-family: var(--mono); font-weight: 700; font-size: 0.98rem; color: var(--text); white-space: nowrap; }
+  .brand .p { color: var(--accent); }
+  .nav-links { display: flex; gap: 20px; font-size: 0.85rem; }
+  .nav-links a { color: var(--muted); }
+  .nav-links a:hover { color: var(--text); text-decoration: none; }
+  @media (max-width: 720px) { .nav-links { display: none; } }
+
+  /* ---------- hero ---------- */
+  .hero { padding: 74px 0 60px; }
+  .hero h1 {
+    font-size: clamp(2.1rem, 6vw, 3.4rem);
+    margin: 0 0 14px;
+    letter-spacing: -0.02em;
+  }
+  .hero h1 .p { color: var(--accent); }
+  .hero .tag {
+    font-size: clamp(1.02rem, 2.6vw, 1.28rem);
+    color: var(--muted);
+    max-width: 62ch;
+    margin: 0 0 30px;
+  }
+  .hero .tag strong { color: var(--text); font-weight: 600; }
+  .badges { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 30px; }
+  .badge {
+    font-family: var(--mono); font-size: 0.72rem;
+    padding: 4px 10px; border-radius: 999px;
+    border: 1px solid var(--border-2); color: var(--muted);
+    background: var(--panel-2);
+  }
+  .cta-row { display: flex; flex-wrap: wrap; gap: 12px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 0.9rem; font-weight: 600;
+    padding: 11px 18px; border-radius: 9px; border: 1px solid var(--border-2);
+    color: var(--text); background: var(--panel);
+    transition: border-color .15s, transform .05s;
+  }
+  .btn:hover { border-color: var(--accent-2); text-decoration: none; }
+  .btn:active { transform: translateY(1px); }
+  .btn.primary { background: linear-gradient(180deg, #1c6b2d, #17552a); border-color: #2f8f45; color: #eafff0; }
+  .btn.primary:hover { border-color: var(--accent); }
+
+  /* ---------- install line ---------- */
+  .install {
+    margin-top: 26px;
+    display: flex; align-items: stretch;
+    border: 1px solid var(--border); border-radius: 10px;
+    overflow: hidden; background: var(--panel-2); max-width: 560px;
+  }
+  .install .prompt { color: var(--dim); padding: 12px 4px 12px 14px; font-family: var(--mono); }
+  .install code {
+    font-family: var(--mono); font-size: 0.9rem; color: var(--text);
+    padding: 12px 14px 12px 6px; white-space: nowrap; overflow-x: auto; flex: 1;
+    background: none; border: none;
+  }
+
+  /* ---------- terminal window ---------- */
+  .term {
+    border: 1px solid var(--border-2);
+    border-radius: var(--radius);
+    background: #090c12;
+    box-shadow: 0 24px 60px -30px rgba(0,0,0,0.9);
+    overflow: hidden;
+  }
+  .term-bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 11px 14px; background: #10141d; border-bottom: 1px solid var(--border);
+  }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .dot.r { background: #ff5f57; } .dot.y { background: #febc2e; } .dot.g { background: #28c840; }
+  .term-title { margin-left: 8px; font-family: var(--mono); font-size: 0.76rem; color: var(--dim); }
+  .term-body {
+    padding: 16px 18px; overflow-x: auto;
+    font-family: var(--mono); font-size: 0.86rem; line-height: 1.75;
+  }
+  .term-body pre { margin: 0; white-space: pre; }
+  .cmt   { color: var(--dim); }
+  .pr    { color: var(--accent); font-weight: 700; }   /* artisan> prompt */
+  .pin   { color: var(--text); }                       /* user input */
+  .out   { color: var(--muted); }
+  .ok    { color: var(--accent); }
+  .warn  { color: var(--accent-4); }
+  .mac   { color: var(--accent-3); }
+  .blu   { color: var(--accent-2); }
+  .yel   { color: var(--yellow); }
+
+  /* ---------- feature cards ---------- */
+  .cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 26px; }
+  @media (max-width: 680px) { .cards { grid-template-columns: 1fr; } }
+  .card {
+    border: 1px solid var(--border); border-radius: var(--radius);
+    background: linear-gradient(180deg, var(--panel), var(--panel-2));
+    padding: 18px 18px 16px;
+  }
+  .card h3 { display: flex; align-items: center; gap: 9px; font-family: var(--mono); font-size: 0.98rem; }
+  .card h3 .tagpill {
+    font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.06em;
+    padding: 2px 7px; border-radius: 5px; border: 1px solid var(--border-2);
+    color: var(--dim); text-transform: uppercase; margin-left: auto;
+  }
+  .card p { color: var(--muted); font-size: 0.9rem; margin: 8px 0 12px; }
+  .card .ex {
+    display: block; background: #090c12; border: 1px solid var(--border);
+    border-radius: 8px; padding: 9px 11px; font-family: var(--mono);
+    font-size: 0.8rem; color: var(--text); overflow-x: auto; white-space: pre;
+  }
+  .card .ex .pr { color: var(--accent); }
+
+  /* ---------- reference table ---------- */
+  .table-scroll {
+    margin-top: 24px; border: 1px solid var(--border); border-radius: var(--radius);
+    overflow-x: auto; background: var(--panel-2);
+    -webkit-overflow-scrolling: touch;
+  }
+  table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 0.88rem; }
+  thead th {
+    text-align: left; font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--dim); padding: 12px 16px;
+    border-bottom: 1px solid var(--border-2); background: #0d111a; white-space: nowrap;
+  }
+  tbody td { padding: 12px 16px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: rgba(108,182,255,0.04); }
+  td.cmd { font-family: var(--mono); color: var(--accent); white-space: nowrap; font-weight: 600; }
+  td.desc { color: var(--muted); }
+  td.ex { font-family: var(--mono); color: var(--text); white-space: nowrap; font-size: 0.82rem; }
+
+  /* ---------- config grid ---------- */
+  .cfg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px; }
+  @media (max-width: 720px) { .cfg-grid { grid-template-columns: 1fr; } }
+  .cfg-card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel-2); overflow: hidden; }
+  .cfg-card > .h {
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+    font-family: var(--mono); font-size: 0.82rem; color: var(--text);
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  }
+  .cfg-card > .h .path { color: var(--accent-2); }
+  .cfg-card > .h .role { color: var(--dim); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  .codeblock {
+    margin: 0; padding: 14px 16px; overflow-x: auto;
+    font-family: var(--mono); font-size: 0.8rem; line-height: 1.7; color: var(--text);
+    background: #090c12; white-space: pre;
+  }
+  .codeblock .k { color: var(--accent-3); }   /* keyword */
+  .codeblock .s { color: var(--accent); }      /* string */
+  .codeblock .c { color: var(--dim); }         /* comment */
+  .codeblock .n { color: var(--yellow); }      /* number/key */
+
+  .note {
+    margin-top: 18px; padding: 14px 16px; border-radius: 10px;
+    border: 1px solid var(--border-2); background: rgba(240,136,62,0.06);
+    color: var(--muted); font-size: 0.9rem;
+  }
+  .note b { color: var(--accent-4); }
+
+  ul.clean { list-style: none; padding: 0; margin: 16px 0 0; }
+  ul.clean li { padding: 8px 0 8px 26px; position: relative; color: var(--muted); border-bottom: 1px solid var(--border); }
+  ul.clean li:last-child { border-bottom: none; }
+  ul.clean li::before { content: "›"; position: absolute; left: 6px; color: var(--accent); font-weight: 700; }
+  ul.clean li b { color: var(--text); font-weight: 600; }
+
+  .kv { font-family: var(--mono); }
+
+  /* ---------- footer ---------- */
+  footer {
+    border-top: 1px solid var(--border); padding: 40px 0 60px; margin-top: 20px;
+    color: var(--dim); font-size: 0.88rem;
+  }
+  .foot-grid { display: flex; flex-wrap: wrap; gap: 24px; justify-content: space-between; align-items: flex-start; }
+  .foot-grid .col { min-width: 200px; }
+  footer .lic { font-family: var(--mono); }
+  .soon {
+    display: inline-block; margin-left: 8px; font-family: var(--mono); font-size: 0.64rem;
+    padding: 2px 7px; border-radius: 5px; border: 1px solid var(--border-2);
+    color: var(--accent-3); text-transform: uppercase; letter-spacing: 0.06em;
+  }
+
+  ::selection { background: rgba(126,231,135,0.28); }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="nav-inner">
+    <div class="brand"><span class="p">$</span> lara-shell</div>
+    <nav class="nav-links">
+      <a href="#what">What it is</a>
+      <a href="#reference">Reference</a>
+      <a href="#session">Session</a>
+      <a href="#config">Config</a>
+      <a href="https://github.com/amims71/lara-shell">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <!-- ============ HERO ============ -->
+  <div class="wrap">
+    <section class="hero" style="border:none;">
+      <p class="eyebrow">Laravel package · PsySH + artisan</p>
+      <h1><span class="p">lara-shell</span> — an interactive artisan command shell</h1>
+      <p class="tag">
+        A PsySH-based REPL where <strong>bare words run as artisan commands</strong> — with managed
+        background jobs, aliases, macros, fuzzy matching and a production safety guard. Raw PHP still
+        evaluates, so it is Tinker and your command runner fused into one prompt.
+      </p>
+
+      <div class="badges">
+        <span class="badge">php ^8.2</span>
+        <span class="badge">laravel 10 · 11 · 12</span>
+        <span class="badge">psy/psysh ^0.12</span>
+        <span class="badge">MIT</span>
+      </div>
+
+      <div class="cta-row">
+        <a class="btn primary" href="#reference">Command reference →</a>
+        <a class="btn" href="https://github.com/amims71/lara-shell">View on GitHub</a>
+      </div>
+
+      <div class="install">
+        <span class="prompt">$</span>
+        <code>composer require amims71/lara-shell</code>
+      </div>
+      <p class="lead" style="margin-top:14px; font-size:0.95rem;">
+        Then launch the prompt with <code>php artisan shell</code>
+        <span class="mono" style="color:var(--dim)">(aliases: <code>terminal</code>, <code>repl</code>)</span>.
+      </p>
+    </section>
+  </div>
+
+  <!-- ============ WHAT IT IS ============ -->
+  <div class="wrap">
+    <section id="what">
+      <p class="eyebrow">The idea</p>
+      <h2>One prompt, three languages</h2>
+      <p class="lead">
+        Run <code>php artisan shell</code> and you get an <code>artisan&gt;</code> prompt. Every line you type
+        is classified and routed automatically — you never prefix an artisan command.
+      </p>
+
+      <ul class="clean">
+        <li><b>Bare words run as artisan.</b> Type <code>migrate</code> or <code>route:list</code> and it dispatches the artisan command directly — no <code>php artisan</code> boilerplate.</li>
+        <li><b>Raw PHP still evaluates.</b> Anything that is not a recognized command falls through to PsySH and is evaluated as PHP — the full Tinker experience, in the same session.</li>
+        <li><b>Escape to PHP with <code>;</code>.</b> Prefix a line with a semicolon to force PHP evaluation, even when the first word collides with a command name.</li>
+        <li><b>Fuzzy resolution.</b> Prefix abbreviations (<code>mig</code>), colon-segment abbreviations (<code>m:f</code> → <code>migrate:fresh</code>) and fzf-style subsequence matching all resolve to the canonical command when the winner is unambiguous.</li>
+      </ul>
+
+      <p class="lead" style="margin-top:20px;">
+        Under the hood each typed line is classified as <span class="kv" style="color:var(--accent)">artisan</span>,
+        <span class="kv" style="color:var(--accent-3)">macro</span>,
+        <span class="kv" style="color:var(--accent-2)">meta</span> or
+        <span class="kv" style="color:var(--yellow)">php</span> — empty lines and anything starting with
+        <code>;</code> go to PHP; a leading <code>@</code> runs a macro; a first word that is a built-in
+        meta-command runs that; a resolvable artisan name dispatches; everything else is PHP.
+      </p>
+    </section>
+  </div>
+
+  <!-- ============ COMMAND REFERENCE ============ -->
+  <div class="wrap">
+    <section id="reference">
+      <p class="eyebrow">Capabilities</p>
+      <h2>Command reference</h2>
+      <p class="lead">Every capability, with the exact syntax read from the package source. The prompt is <code>artisan&gt;</code>.</p>
+
+      <div class="cards">
+
+        <div class="card">
+          <h3>Bare-word artisan <span class="tagpill">dispatch</span></h3>
+          <p>Type any artisan command with no prefix. Arguments and options pass straight through to the underlying command.</p>
+          <span class="ex"><span class="pr">artisan&gt;</span> route:list --json</span>
+        </div>
+
+        <div class="card">
+          <h3>Fuzzy matching <span class="tagpill">resolve</span></h3>
+          <p>Prefix, colon-segment and subsequence matching resolve short input to the real command name when a single clear winner exists.</p>
+          <span class="ex"><span class="pr">artisan&gt;</span> m:f        <span class="cmt"># → migrate:fresh</span></span>
+        </div>
+
+        <div class="card">
+          <h3>Palette &amp; <code>?</code> <span class="tagpill">search</span></h3>
+          <p>Search the command catalog by name or description. An empty query lists everything, name-sorted. <code>?</code> is the shortcut for <code>palette</code>.</p>
+          <span class="ex"><span class="pr">artisan&gt;</span> ? queue</span>
+        </div>
+
+        <div class="card">
+          <h3>PHP eval + <code>;</code> escape <span class="tagpill">tinker</span></h3>
+          <p>Unrecognized lines evaluate as PHP. Lead with a semicolon to force PHP even when the first token looks like a command.</p>
+          <span class="ex"><span class="pr">artisan&gt;</span> ; User::count()</span>
+        </div>
+
+        <div class="card">
+          <h3>Background jobs <span class="tagpill">&amp; · jobs</span></h3>
+          <p>Append <code>&amp;</code> to background a command. Long-running commands (<code>serve</code>, <code>queue:work</code>, …) background automatically. <code>jobs</code> lists them across all terminals.</p>
+          <span class="ex"><span class="pr">artisan&gt;</span> queue:work --tries=3 &amp;
+<span class="pr">artisan&gt;</span> jobs</span>
+        </div>
+
+        <div class="card">
+          <h3>kill &amp; logs <span class="tagpill">jobs</span></h3>
+          <p><code>kill &lt;id&gt;</code> terminates a job and its whole process tree. <code>logs &lt;id&gt;</code> prints the captured output; <code>-f</code> / <code>--follow</code> tails it live.</p>
+          <span class="ex"><span class="pr">artisan&gt;</span> logs 9f3a1c2b -f
+<span class="pr">artisan&gt;</span> kill 9f3a1c2b</span>
+        </div>
+
+        <div class="card">
+          <h3>Aliases <span class="tagpill">alias</span></h3>
+          <p>Aliases rewrite the first word of a line. Add, remove and list them; a real command always wins over an alias of the same name.</p>
+          <span class="ex"><span class="pr">artisan&gt;</span> alias add fresh migrate:fresh --seed
+<span class="pr">artisan&gt;</span> alias list</span>
+        </div>
+
+        <div class="card">
+          <h3>Macros <span class="tagpill">@</span></h3>
+          <p>A macro (defined in <code>.lara-shell.php</code>) is a named list of steps run in order. Invoke it with the <code>@</code> sigil; macros may call other macros.</p>
+          <span class="ex"><span class="pr">artisan&gt;</span> @reset</span>
+        </div>
+
+        <div class="card">
+          <h3>Safety guard <span class="tagpill">guard</span></h3>
+          <p>In guarded environments (default: <code>production</code>) destructive commands require you to re-type the command name to confirm; a <code>block</code> list can forbid them outright. <code>--force</code>/<code>-f</code> also triggers confirmation.</p>
+          <span class="ex"><span class="pr">artisan&gt;</span> migrate:fresh
+<span class="warn">This command is guarded. Re-type "migrate:fresh":</span></span>
+        </div>
+
+        <div class="card">
+          <h3>reload <span class="tagpill">catalog</span></h3>
+          <p>Reload application code and refresh the command catalog so newly added commands and aliases are resolvable without leaving the shell.</p>
+          <span class="ex"><span class="pr">artisan&gt;</span> reload</span>
+        </div>
+
+      </div>
+
+      <h3 style="margin-top:40px; font-family:var(--mono); font-size:1rem;">Meta-command syntax</h3>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>Command</th><th>Description</th><th>Example</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="cmd">jobs</td>
+              <td class="desc">List background jobs (ID, command, status, uptime) across all terminals.</td>
+              <td class="ex">jobs</td>
+            </tr>
+            <tr>
+              <td class="cmd">kill &lt;id&gt;</td>
+              <td class="desc">Kill a background job and its entire process tree (SIGTERM, then SIGKILL survivors).</td>
+              <td class="ex">kill 9f3a1c2b</td>
+            </tr>
+            <tr>
+              <td class="cmd">logs &lt;id&gt; [-f]</td>
+              <td class="desc">Print a job's log; <code>-f</code>/<code>--follow</code> tails it until the job stops.</td>
+              <td class="ex">logs 9f3a1c2b --follow</td>
+            </tr>
+            <tr>
+              <td class="cmd">reload</td>
+              <td class="desc">Reload code and refresh the command catalog.</td>
+              <td class="ex">reload</td>
+            </tr>
+            <tr>
+              <td class="cmd">alias add &lt;name&gt; &lt;expansion&gt;</td>
+              <td class="desc">Create/replace an alias whose expansion replaces the first word.</td>
+              <td class="ex">alias add fresh migrate:fresh --seed</td>
+            </tr>
+            <tr>
+              <td class="cmd">alias rm &lt;name&gt;</td>
+              <td class="desc">Remove an alias.</td>
+              <td class="ex">alias rm fresh</td>
+            </tr>
+            <tr>
+              <td class="cmd">alias list</td>
+              <td class="desc">List all aliases (the default when <code>alias</code> is run with no subcommand).</td>
+              <td class="ex">alias list</td>
+            </tr>
+            <tr>
+              <td class="cmd">palette [query]</td>
+              <td class="desc">Fuzzy-search the command catalog; empty query lists everything. Aliased to <code>?</code>.</td>
+              <td class="ex">palette queue</td>
+            </tr>
+            <tr>
+              <td class="cmd">? [query]</td>
+              <td class="desc">Shorthand for <code>palette</code>.</td>
+              <td class="ex">? migrate</td>
+            </tr>
+            <tr>
+              <td class="cmd">@&lt;macro&gt;</td>
+              <td class="desc">Run a named macro's steps in order (defined in <code>.lara-shell.php</code>).</td>
+              <td class="ex">@reset</td>
+            </tr>
+            <tr>
+              <td class="cmd">&lt;cmd&gt; &amp;</td>
+              <td class="desc">Trailing <code>&amp;</code> backgrounds the command; long-running commands background automatically.</td>
+              <td class="ex">serve &amp;</td>
+            </tr>
+            <tr>
+              <td class="cmd">; &lt;php&gt;</td>
+              <td class="desc">Leading <code>;</code> forces the line to evaluate as PHP.</td>
+              <td class="ex">; App\Models\User::count()</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============ SESSION ============ -->
+  <div class="wrap">
+    <section id="session">
+      <p class="eyebrow">A realistic session</p>
+      <h2>What it feels like</h2>
+      <p class="lead">Start a dev server in the background, migrate, define a shortcut, run a macro, drop into PHP, then manage jobs — all without leaving the prompt.</p>
+
+      <div class="term">
+        <div class="term-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="term-title">php artisan shell</span>
+        </div>
+        <div class="term-body"><pre><span class="cmt"># long-running commands auto-background — no & needed</span>
+<span class="pr">artisan&gt;</span> <span class="pin">serve</span>
+<span class="ok">Started background job 1a2b3c4d (serve)</span>
+
+<span class="pr">artisan&gt;</span> <span class="pin">migrate</span>
+<span class="warn">This command is guarded. Re-type "migrate" to proceed:</span> <span class="pin">migrate</span>
+<span class="out">   INFO  Running migrations.</span>
+<span class="out">  2024_01_01_000000_create_users_table ..................... DONE</span>
+
+<span class="cmt"># make a reusable shortcut (rewrites the first word)</span>
+<span class="pr">artisan&gt;</span> <span class="pin">alias add fresh migrate:fresh --seed</span>
+<span class="ok">Added alias fresh =&gt; migrate:fresh --seed</span>
+
+<span class="cmt"># run a macro defined in .lara-shell.php (steps run in order)</span>
+<span class="pr">artisan&gt;</span> <span class="mac">@reset</span>
+<span class="out">  cache:clear ... DONE
+  config:clear ... DONE
+  migrate:fresh --seed ... DONE</span>
+
+<span class="cmt"># unrecognized input evaluates as PHP — full Tinker</span>
+<span class="pr">artisan&gt;</span> <span class="pin">; App\Models\User::count()</span>
+<span class="yel">=&gt; 42</span>
+
+<span class="cmt"># background a worker explicitly with a trailing &amp;</span>
+<span class="pr">artisan&gt;</span> <span class="pin">queue:work --tries=3 &amp;</span>
+<span class="ok">Started background job 9f3a1c2b (queue:work --tries=3)</span>
+
+<span class="pr">artisan&gt;</span> <span class="pin">jobs</span>
+<span class="out">+-----------+----------------------+---------+--------+
+| ID        | Command              | Status  | Uptime |
++-----------+----------------------+---------+--------+
+| 1a2b3c4d  | serve                | running | 3m12s  |
+| 9f3a1c2b  | queue:work --tries=3 | running | 8s     |
++-----------+----------------------+---------+--------+</span>
+
+<span class="pr">artisan&gt;</span> <span class="pin">logs 9f3a1c2b -f</span>
+<span class="out">[2024-01-01 12:00:08] Processing: App\Jobs\SendWelcome</span>
+<span class="cmt"># ^C to stop following, then reap the job</span>
+<span class="pr">artisan&gt;</span> <span class="pin">kill 9f3a1c2b</span>
+<span class="ok">Killed job 9f3a1c2b.</span></pre></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============ CONFIG ============ -->
+  <div class="wrap">
+    <section id="config">
+      <p class="eyebrow">Configuration</p>
+      <h2>Two config files</h2>
+      <p class="lead">
+        Package behavior lives in <code>config/lara-shell.php</code>. Your project-local aliases and
+        macros live in <code>.lara-shell.php</code> at the project root — created and updated for you as
+        you run <code>alias add</code>/<code>alias rm</code>.
+      </p>
+
+      <p class="lead" style="margin-top:14px; font-size:0.95rem;">
+        Publish the package config with
+        <code>php artisan vendor:publish --tag=lara-shell-config</code>.
+      </p>
+
+      <div class="cfg-grid">
+
+        <div class="cfg-card">
+          <div class="h"><span class="path">config/lara-shell.php</span><span class="role">package</span></div>
+          <pre class="codeblock"><span class="k">return</span> [
+  <span class="c">// command name + aliases</span>
+  <span class="s">'command'</span> =&gt; [
+    <span class="s">'name'</span> =&gt; <span class="s">'shell'</span>,
+    <span class="s">'aliases'</span> =&gt; [<span class="s">'terminal'</span>, <span class="s">'repl'</span>],
+  ],
+
+  <span class="c">// auto-backgrounded commands</span>
+  <span class="s">'long_running'</span> =&gt; [
+    <span class="s">'serve'</span>, <span class="s">'queue:work'</span>, <span class="s">'queue:listen'</span>,
+    <span class="s">'schedule:work'</span>, <span class="s">'horizon'</span>, <span class="s">'pail'</span>,
+    <span class="s">'reverb:start'</span>, <span class="s">'octane:start'</span>, <span class="s">...</span>
+  ],
+
+  <span class="c">// production safety guard</span>
+  <span class="s">'guard'</span> =&gt; [
+    <span class="s">'environments'</span> =&gt; [<span class="s">'production'</span>],
+    <span class="s">'block'</span>   =&gt; [],
+    <span class="s">'confirm'</span> =&gt; [
+      <span class="s">'migrate'</span>, <span class="s">'migrate:fresh'</span>,
+      <span class="s">'db:wipe'</span>, <span class="s">'db:seed'</span>,
+      <span class="s">'cache:clear'</span>, <span class="s">'optimize:clear'</span>, <span class="s">...</span>
+    ],
+  ],
+
+  <span class="s">'php_escape'</span>  =&gt; <span class="s">';'</span>,   <span class="c">// force-PHP prefix</span>
+  <span class="s">'macro_sigil'</span> =&gt; <span class="s">'@'</span>,   <span class="c">// macro trigger</span>
+];</pre>
+        </div>
+
+        <div class="cfg-card">
+          <div class="h"><span class="path">.lara-shell.php</span><span class="role">per project</span></div>
+          <pre class="codeblock"><span class="c">// project root — aliases &amp; macros.</span>
+<span class="c">// managed by `alias add` / `alias rm`,</span>
+<span class="c">// and safe to hand-edit.</span>
+<span class="k">return</span> [
+
+  <span class="c">// first-word rewrites</span>
+  <span class="s">'aliases'</span> =&gt; [
+    <span class="s">'fresh'</span> =&gt; <span class="s">'migrate:fresh --seed'</span>,
+    <span class="s">'tw'</span>    =&gt; <span class="s">'tinker'</span>,
+  ],
+
+  <span class="c">// named step lists, run in order.</span>
+  <span class="c">// invoke with @name; steps may</span>
+  <span class="c">// reference other @macros.</span>
+  <span class="s">'macros'</span> =&gt; [
+    <span class="s">'reset'</span> =&gt; [
+      <span class="s">'cache:clear'</span>,
+      <span class="s">'config:clear'</span>,
+      <span class="s">'migrate:fresh --seed'</span>,
+    ],
+    <span class="s">'up'</span> =&gt; [
+      <span class="s">'@reset'</span>,
+      <span class="s">'serve'</span>,
+    ],
+  ],
+];</pre>
+        </div>
+
+      </div>
+
+      <div class="note">
+        <b>Guard behavior:</b> the guard only engages when the app is running in a guarded environment
+        (default <code>production</code>). Commands on the <code>confirm</code> list — or any command carrying
+        <code>--force</code> / <code>-f</code> — prompt you to re-type the command name; commands on the
+        <code>block</code> list are refused outright. Elsewhere (local, staging) everything runs unguarded.
+      </div>
+    </section>
+  </div>
+
+</main>
+
+<!-- ============ FOOTER ============ -->
+<div class="wrap">
+  <footer>
+    <div class="foot-grid">
+      <div class="col">
+        <div class="brand" style="margin-bottom:8px;"><span class="p">$</span> lara-shell</div>
+        <div>An interactive artisan command shell for Laravel.</div>
+        <div class="lic" style="margin-top:10px;">Released under the <b style="color:var(--text)">MIT</b> license.</div>
+      </div>
+      <div class="col">
+        <div style="color:var(--text); font-weight:600; margin-bottom:8px;">Links</div>
+        <div><a href="https://github.com/amims71/lara-shell">github.com/amims71/lara-shell</a></div>
+        <div style="margin-top:6px;"><a href="#reference">Command reference</a></div>
+        <div style="margin-top:6px;"><a href="#config">Configuration</a></div>
+      </div>
+      <div class="col">
+        <div style="color:var(--text); font-weight:600; margin-bottom:8px;">Roadmap <span class="soon">soon</span></div>
+        <div>A fast Unix daemon driver is on the way — a persistent
+          background process that keeps the app booted between commands for
+          near-instant dispatch, replacing per-command subprocess spin-up on
+          supported systems.</div>
+      </div>
+    </div>
+  </footer>
+</div>
+
+</body>
+</html>
