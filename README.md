@@ -226,6 +226,7 @@ Publish it with `php artisan vendor:publish --tag=lara-shell-config`. Keys:
 | --- | --- |
 | `command.name` | The artisan command name (default `shell`). |
 | `command.aliases` | Command aliases (default `terminal`, `repl`). |
+| `driver` | Execution driver: `auto` (warm-fork on Unix, subprocess elsewhere), `forking`, or `local`. |
 | `long_running` | Commands auto-backgrounded without a trailing `&`. Supports `fnmatch` patterns like `queue:*`. |
 | `guard.environments` | Environments where the safety guard is active (default `['production']`). |
 | `guard.block` | Commands refused outright in a guarded environment. |
@@ -240,6 +241,8 @@ Default config:
 
 return [
     'command' => ['name' => 'shell', 'aliases' => ['terminal', 'repl']],
+
+    'driver' => 'auto',
 
     'long_running' => [
         'serve',
@@ -304,11 +307,13 @@ return [
 
 ---
 
-## How commands run (and what's coming)
+## How commands run
 
-The current cross-platform driver runs **each command as a fresh subprocess** of your app's PHP binary and `artisan` entry point. Foreground commands stream their output live; background commands are fully detached and log to `storage/lara-shell/logs/<job-id>.log`, with job metadata tracked in a shared registry so multiple terminals see the same jobs.
+On **macOS/Linux** (with `pcntl` + `posix`), lara-shell boots your app **once** and runs each foreground command by **`pcntl_fork()`-ing the warm process** — so commands execute **instantly** (no re-boot), inherit your real terminal (colors, `make:*` prompts), and a crash or `exit()` only kills that fork, never your session. Long-running commands are detached background jobs logged to `storage/lara-shell/logs/<job-id>.log` and tracked in a shared registry so multiple terminals see the same jobs. `reload` re-execs the shell for fresh code.
 
-> **Coming in a future release:** a fast **persistent daemon** for macOS/Linux that keeps the framework booted for **instant execution**, shares jobs across terminals over a socket, and runs commands under a **PTY**. Until then, the cross-platform subprocess driver described above is the default everywhere.
+On **Windows / hosts without `pcntl`**, it transparently falls back to running each command as a **fresh subprocess**.
+
+Pick a driver with the `driver` config key: `auto` (default — warm-fork on Unix, subprocess elsewhere), `forking`, or `local`.
 
 ---
 

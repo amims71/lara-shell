@@ -675,11 +675,12 @@
         <div style="margin-top:6px;"><a href="#config">Configuration</a></div>
       </div>
       <div class="col">
-        <div style="color:var(--text); font-weight:600; margin-bottom:8px;">Roadmap <span class="soon">soon</span></div>
-        <div>A fast Unix daemon driver is on the way — a persistent
-          background process that keeps the app booted between commands for
-          near-instant dispatch, replacing per-command subprocess spin-up on
-          supported systems.</div>
+        <div style="color:var(--text); font-weight:600; margin-bottom:8px;">Fast on Unix</div>
+        <div>On macOS/Linux the app boots once and each command runs in a
+          <code>pcntl_fork</code> of the warm process — instant, crash-isolated,
+          in your real terminal. Windows and hosts without <code>pcntl</code>
+          fall back to a fresh subprocess per command. Choose with the
+          <code>driver</code> config key.</div>
       </div>
     </div>
   </footer>
