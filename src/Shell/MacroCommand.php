@@ -4,7 +4,7 @@ namespace Amims71\LaraShell\Shell;
 
 use Closure;
 use Psy\Command\Command;
-use Symfony\Component\Console\Input\InputArgument;
+use Psy\Input\CodeArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
@@ -27,8 +27,12 @@ class MacroCommand extends Command
     {
         $this->setName('@'.$this->macroName)
             ->setDescription('Run the "'.$this->macroName.'" macro.')
-            ->addArgument('args', InputArgument::IS_ARRAY, 'Ignored; macros take no arguments.')
             ->ignoreValidationErrors();
+
+        // CodeArgument so any trailing text is captured raw instead of parsed as options.
+        $this->getDefinition()->addArgument(
+            new CodeArgument('args', CodeArgument::OPTIONAL, 'Ignored; macros take no arguments.')
+        );
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
